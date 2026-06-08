@@ -1,0 +1,72 @@
+# Example configuration for the transient 7DOF + Pacejka vehicle model.
+# Nested [vehicle.*] tables map directly onto the DynamicVehicleParams sub-models.
+
+[vehicle.chassis]
+mass_kg = 1300.0
+sprung_mass_kg = 1150.0
+Izz_kgm2 = 1800.0
+Ixx_kgm2 = 500.0
+Iyy_kgm2 = 1600.0
+wheelbase_m = 2.6
+track_front_m = 1.6
+track_rear_m = 1.55
+cg_height_m = 0.30
+weight_dist_front = 0.47
+roll_centre_h_m = 0.05
+pitch_centre_h_m = 0.10
+
+[vehicle.suspension]
+k_spring_front_n_m = 60000.0
+k_spring_rear_n_m = 55000.0
+c_damp_front_ns_m = 4000.0
+c_damp_rear_ns_m = 3800.0
+k_arb_front_nm_rad = 30000.0
+k_arb_rear_nm_rad = 20000.0
+use_heave = true
+
+[vehicle.drivetrain]
+layout = "rwd"
+torque_max_nm = 6000.0
+p_max_kw = 350.0
+wheel_radius_m = 0.33
+wheel_inertia_kgm2 = 1.2
+brake_torque_max_nm = 6000.0
+brake_balance_front = 0.62
+
+[vehicle.driver]
+lookahead_min_m = 5.0
+lookahead_gain_s = 0.3
+steer_max_rad = 0.5
+kp_speed = 0.8
+ki_speed = 0.1
+accel_ref_ms2 = 10.0
+
+[vehicle.aero]
+cd = 0.8
+cl = 1.2
+rho_air = 1.225
+aero_balance_front = 0.45
+
+[vehicle.tyre_front]
+B_y = 10.0
+C_y = 1.5
+D_y_mu = 1.7
+E_y = -0.5
+B_x = 12.0
+C_x = 1.6
+D_x_mu = 1.6
+E_x = -0.5
+Fz0_n = 3500.0
+k_load = 0.10
+
+[vehicle.tyre_rear]
+B_y = 10.0
+C_y = 1.5
+D_y_mu = 1.7
+E_y = -0.5
+B_x = 12.0
+C_x = 1.6
+D_x_mu = 1.6
+E_x = -0.5
+Fz0_n = 3500.0
+k_load = 0.10
