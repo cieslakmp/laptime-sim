@@ -1,0 +1,10 @@
+[vehicle]
+mass_kg = 300.0
+p_max_kw = 80.0
+f_brake_max_n = 8000.0
+mu_x = 1.6
+mu_y = 1.8
+cd = 0.5
+cl = 1.5
+aero_ref_area_m2 = 1.2
+v_max_ms = 40.0
