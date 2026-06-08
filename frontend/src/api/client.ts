@@ -45,6 +45,23 @@ export interface OptimizeResult {
   optimized: SimResult;
 }
 
+export interface OCPSimResult extends SimResult {
+  n_m: number[];
+  psi_rad: number[];
+  x_path: number[];
+  y_path: number[];
+  solve_time_s: number;
+  solver_status: string;
+}
+
+export interface OCPResult {
+  baseline_lap_time_s: number;
+  optimized_lap_time_s: number;
+  delta_s: number;
+  baseline: SimResult;
+  optimized: OCPSimResult;
+}
+
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const err = await res.text();
@@ -72,6 +89,20 @@ export async function simulate(trackId: string, vehicle: VehicleParams, ds = 2):
     body: JSON.stringify({ track_id: trackId, vehicle, ds }),
   });
   return json<SimResult>(res);
+}
+
+export async function solveOCP(
+  trackId: string,
+  vehicle: VehicleParams,
+  ds = 2,
+  nIntervals = 150
+): Promise<OCPResult> {
+  const res = await fetch(`${BASE}/ocp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ track_id: trackId, vehicle, ds, n_intervals: nIntervals }),
+  });
+  return json<OCPResult>(res);
 }
 
 export async function optimizeRacingLine(

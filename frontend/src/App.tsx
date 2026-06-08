@@ -1,14 +1,17 @@
 import React, { useState, useCallback } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   uploadTrack,
   getTrackDetail,
   simulate,
   optimizeRacingLine,
+  solveOCP,
   type VehicleParams,
   type SimResult,
   type TrackInfo,
   type OptimizeResult,
+  type OCPResult,
+  type OCPSimResult,
 } from "./api/client";
 import VehicleForm from "./components/VehicleForm";
 import TrackMap from "./components/TrackMap";
@@ -32,6 +35,7 @@ export default function App() {
   const [trackInfo, setTrackInfo] = useState<TrackInfo | null>(null);
   const [simResult, setSimResult] = useState<SimResult | null>(null);
   const [optResult, setOptResult] = useState<OptimizeResult | null>(null);
+  const [ocpResult, setOcpResult] = useState<OCPResult | null>(null);
   const [status, setStatus] = useState<string>("");
   const [error, setError] = useState<string>("");
 
@@ -41,13 +45,18 @@ export default function App() {
     enabled: !!trackInfo,
   });
 
+  const clearResults = () => {
+    setSimResult(null);
+    setOptResult(null);
+    setOcpResult(null);
+    setError("");
+  };
+
   const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setError("");
+    clearResults();
     setStatus("Uploading track...");
-    setSimResult(null);
-    setOptResult(null);
     try {
       const info = await uploadTrack(file);
       setTrackInfo(info);
@@ -60,13 +69,12 @@ export default function App() {
 
   const handleSimulate = useCallback(async () => {
     if (!trackInfo) return;
-    setError("");
-    setStatus("Running simulation...");
-    setOptResult(null);
+    clearResults();
+    setStatus("Running QSS simulation...");
     try {
       const result = await simulate(trackInfo.track_id, vehicle);
       setSimResult(result);
-      setStatus(`Lap time: ${result.lap_time_s.toFixed(3)} s`);
+      setStatus(`QSS lap time: ${result.lap_time_s.toFixed(3)} s`);
     } catch (err) {
       setError(String(err));
       setStatus("");
@@ -75,14 +83,14 @@ export default function App() {
 
   const handleOptimize = useCallback(async () => {
     if (!trackInfo) return;
-    setError("");
-    setStatus("Optimising racing line (may take ~30s)...");
+    clearResults();
+    setStatus("Optimising racing line (min-curvature, ~30 s)...");
     try {
       const result = await optimizeRacingLine(trackInfo.track_id, vehicle);
       setOptResult(result);
       setSimResult(result.baseline);
       setStatus(
-        `Optimised: ${result.optimized_lap_time_s.toFixed(3)} s  (Δ ${result.delta_s.toFixed(3)} s vs centreline)`
+        `Racing line: ${result.optimized_lap_time_s.toFixed(3)} s  (Δ ${result.delta_s.toFixed(3)} s vs centreline)`
       );
     } catch (err) {
       setError(String(err));
@@ -90,21 +98,52 @@ export default function App() {
     }
   }, [trackInfo, vehicle]);
 
-  const series = [];
-  if (simResult && !optResult) {
-    series.push({ result: simResult, label: "Centreline", color: "#6366f1" });
+  const handleOCP = useCallback(async () => {
+    if (!trackInfo) return;
+    clearResults();
+    setStatus("Solving full OCP (CasADi + IPOPT — 1–3 min)...");
+    try {
+      const result = await solveOCP(trackInfo.track_id, vehicle);
+      setOcpResult(result);
+      setSimResult(result.baseline);
+      const ocpSim = result.optimized as OCPSimResult;
+      setStatus(
+        `OCP optimal: ${result.optimized_lap_time_s.toFixed(3)} s  ` +
+        `(Δ ${result.delta_s.toFixed(3)} s vs QSS)  ·  ` +
+        `${ocpSim.solve_time_s.toFixed(1)} s solve  ·  ${ocpSim.solver_status}`
+      );
+    } catch (err) {
+      setError(String(err));
+      setStatus("");
+    }
+  }, [trackInfo, vehicle]);
+
+  // Build velocity-profile series
+  const series: { result: SimResult; label: string; color: string }[] = [];
+  if (simResult) {
+    series.push({ result: simResult, label: "QSS", color: "#6366f1" });
   }
   if (optResult) {
-    series.push({ result: optResult.baseline, label: "Centreline", color: "#6366f1" });
     series.push({ result: optResult.optimized, label: "Racing Line", color: "#f97316" });
   }
+  if (ocpResult) {
+    series.push({ result: ocpResult.optimized, label: "OCP optimal", color: "#22d3ee" });
+  }
 
-  const primaryResult = optResult ? optResult.optimized : simResult;
+  // Primary result for track map colouring
+  const primaryResult = ocpResult?.optimized ?? optResult?.optimized ?? simResult;
+  const ocpSim = ocpResult ? (ocpResult.optimized as OCPSimResult) : undefined;
+
+  // Sidebar lap time rows
+  const lapTimes: { label: string; time: number; color: string }[] = [];
+  if (simResult) lapTimes.push({ label: "QSS", time: simResult.lap_time_s, color: "text-indigo-300" });
+  if (optResult) lapTimes.push({ label: "Racing line", time: optResult.optimized_lap_time_s, color: "text-orange-300" });
+  if (ocpResult) lapTimes.push({ label: "OCP optimal", time: ocpResult.optimized_lap_time_s, color: "text-cyan-300" });
 
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
-      <header className="bg-gray-900 border-b border-gray-800 px-6 py-3 flex items-center gap-4">
+      <header className="bg-gray-900 border-b border-gray-800 px-6 py-3 flex items-center gap-3">
         <h1 className="text-lg font-bold tracking-tight">Lap Time Simulator</h1>
         <div className="flex-1" />
         <label className="cursor-pointer bg-gray-800 hover:bg-gray-700 text-sm px-4 py-1.5 rounded transition">
@@ -116,14 +155,22 @@ export default function App() {
           disabled={!trackInfo}
           className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-sm px-4 py-1.5 rounded transition"
         >
-          Simulate
+          QSS Simulate
         </button>
         <button
           onClick={handleOptimize}
           disabled={!trackInfo}
           className="bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-sm px-4 py-1.5 rounded transition"
         >
-          Optimise Line
+          Racing Line
+        </button>
+        <button
+          onClick={handleOCP}
+          disabled={!trackInfo}
+          className="bg-cyan-700 hover:bg-cyan-600 disabled:opacity-40 text-sm px-4 py-1.5 rounded transition font-semibold"
+          title="Full optimal control problem (CasADi + IPOPT) — takes 1–3 minutes"
+        >
+          Full OCP
         </button>
       </header>
 
@@ -140,17 +187,21 @@ export default function App() {
           {trackInfo && (
             <div className="mb-4 p-3 bg-gray-800 rounded text-xs space-y-1">
               <div className="font-semibold text-gray-200">{trackInfo.name}</div>
-              <div className="text-gray-400">{trackInfo.length_m.toFixed(0)} m · {trackInfo.n_points} pts</div>
-              {simResult && (
-                <div className="text-indigo-300 font-mono text-sm pt-1">
-                  {simResult.lap_time_s.toFixed(3)} s
+              <div className="text-gray-400">{trackInfo.length_m.toFixed(0)} m</div>
+              {lapTimes.map(({ label, time, color }) => (
+                <div key={label} className="flex justify-between">
+                  <span className="text-gray-400">{label}</span>
+                  <span className={`font-mono ${color}`}>{time.toFixed(3)} s</span>
                 </div>
-              )}
-              {optResult && (
-                <div className="text-orange-300 font-mono text-sm">
-                  {optResult.optimized_lap_time_s.toFixed(3)} s (opt)
-                  <span className="text-gray-400 ml-1 text-xs">
-                    Δ {optResult.delta_s.toFixed(3)} s
+              ))}
+              {lapTimes.length > 1 && (
+                <div className="border-t border-gray-700 pt-1 text-gray-500">
+                  best Δ vs QSS:{" "}
+                  <span className="text-green-400 font-mono">
+                    {(
+                      Math.min(...lapTimes.slice(1).map((x) => x.time)) - lapTimes[0].time
+                    ).toFixed(3)}{" "}
+                    s
                   </span>
                 </div>
               )}
@@ -167,6 +218,7 @@ export default function App() {
               <TrackMap
                 track={trackDetail}
                 results={primaryResult ? [{ label: "sim", result: primaryResult, color: "#6366f1" }] : undefined}
+                ocpResult={ocpSim}
               />
             ) : (
               <div className="h-full flex items-center justify-center text-gray-600 text-sm">

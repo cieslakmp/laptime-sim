@@ -53,3 +53,28 @@ class OptimizeResponse(BaseModel):
     optimized_track_id: str
     baseline: SimulateResponse
     optimized: SimulateResponse
+
+
+class OCPRequest(BaseModel):
+    track_id: str
+    vehicle: VehicleParamsRequest
+    ds: float = Field(default=2.0, gt=0)
+    n_intervals: int = Field(default=150, gt=20, description="Number of OCP shooting intervals")
+
+
+class OCPSimResult(SimulateResponse):
+    """SimulateResponse extended with OCP-specific state trajectory."""
+    n_m: list[float]           # lateral offset [m]
+    psi_rad: list[float]       # heading error [rad]
+    x_path: list[float]        # optimal path x coordinates [m]
+    y_path: list[float]        # optimal path y coordinates [m]
+    solve_time_s: float
+    solver_status: str
+
+
+class OCPResponse(BaseModel):
+    baseline_lap_time_s: float
+    optimized_lap_time_s: float
+    delta_s: float
+    baseline: SimulateResponse
+    optimized: OCPSimResult
