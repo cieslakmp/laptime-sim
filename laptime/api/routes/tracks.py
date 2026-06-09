@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, UploadFile
 
 from laptime.api.schemas import TrackUploadResponse
 from laptime.api.store import get_track, list_tracks, save_track
+from laptime.track.library import build_library_track, list_library_tracks
 from laptime.track.loader import load_csv, load_gpx
 
 router = APIRouter()
@@ -49,6 +50,28 @@ async def upload_track(file: UploadFile) -> TrackUploadResponse:
 @router.get("")
 def list_all_tracks() -> list[dict]:
     return list_tracks()
+
+
+@router.get("/library")
+def list_f1_tracks() -> list[dict]:
+    """List the built-in F1 circuit library (metadata + preview outlines)."""
+    return list_library_tracks()
+
+
+@router.post("/library/{circuit_id}", response_model=TrackUploadResponse)
+def load_f1_track(circuit_id: str) -> TrackUploadResponse:
+    """Build a bundled F1 circuit and register it for simulation."""
+    try:
+        track = build_library_track(circuit_id)
+    except KeyError as e:
+        raise HTTPException(404, str(e)) from e
+    track_id = save_track(track)
+    return TrackUploadResponse(
+        track_id=track_id,
+        name=track.name,
+        length_m=round(track.length, 1),
+        n_points=track.n_points,
+    )
 
 
 @router.get("/{track_id}")

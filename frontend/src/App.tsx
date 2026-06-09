@@ -19,6 +19,7 @@ import VehicleForm from "./components/VehicleForm";
 import TrackMap from "./components/TrackMap";
 import VelocityProfile from "./components/VelocityProfile";
 import GGDiagram from "./components/GGDiagram";
+import TrackLibraryModal from "./components/TrackLibraryModal";
 
 const DEFAULT_VEHICLE: VehicleParams = {
   mass_kg: 700,
@@ -41,6 +42,7 @@ export default function App() {
   const [transientResult, setTransientResult] = useState<TransientResult | null>(null);
   const [status, setStatus] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
   const { data: trackDetail } = useQuery({
     queryKey: ["track", trackInfo?.track_id],
@@ -69,6 +71,12 @@ export default function App() {
       setError(String(err));
       setStatus("");
     }
+  }, []);
+
+  const handleLibrarySelect = useCallback((info: TrackInfo, name: string) => {
+    clearResults();
+    setTrackInfo(info);
+    setStatus(`Track loaded: ${name} (${info.length_m.toFixed(0)} m)`);
   }, []);
 
   const handleSimulate = useCallback(async () => {
@@ -171,10 +179,21 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <TrackLibraryModal
+        open={libraryOpen}
+        onClose={() => setLibraryOpen(false)}
+        onSelect={handleLibrarySelect}
+      />
       {/* Header */}
       <header className="bg-gray-900 border-b border-gray-800 px-6 py-3 flex items-center gap-3">
         <h1 className="text-lg font-bold tracking-tight">Lap Time Simulator</h1>
         <div className="flex-1" />
+        <button
+          onClick={() => setLibraryOpen(true)}
+          className="bg-gray-800 hover:bg-gray-700 text-sm px-4 py-1.5 rounded transition"
+        >
+          F1 Track Library
+        </button>
         <label className="cursor-pointer bg-gray-800 hover:bg-gray-700 text-sm px-4 py-1.5 rounded transition">
           Upload Track (CSV/GPX)
           <input type="file" accept=".csv,.gpx" onChange={handleUpload} className="hidden" />

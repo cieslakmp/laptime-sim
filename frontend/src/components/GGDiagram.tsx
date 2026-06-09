@@ -39,8 +39,8 @@ export default function GGDiagram({ series }: Props) {
         plot_bgcolor: "rgba(0,0,0,0)",
         font: { color: "#e5e7eb" },
         margin: { t: 30, b: 50, l: 60, r: 20 },
-        xaxis: { title: "Lateral [g]", gridcolor: "#374151", zeroline: true, zerolinecolor: "#6b7280" },
-        yaxis: { title: "Longitudinal [g]", gridcolor: "#374151", zeroline: true, zerolinecolor: "#6b7280", scaleanchor: "x" },
+        xaxis: { title: { text: "Lateral [g]" }, gridcolor: "#374151", zeroline: true, zerolinecolor: "#6b7280" },
+        yaxis: { title: { text: "Longitudinal [g]" }, gridcolor: "#374151", zeroline: true, zerolinecolor: "#6b7280", scaleanchor: "x" },
         title: { text: "G-G Diagram", font: { size: 14 } },
       }}
       config={{ responsive: true, displayModeBar: false }}
