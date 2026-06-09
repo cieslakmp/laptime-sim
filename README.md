@@ -80,6 +80,17 @@ docker-compose up
 Open **http://localhost:5173** for the web dashboard.  
 API docs at **http://localhost:8000/docs**.
 
+The dashboard talks to the API through the Vite dev-server proxy. Inside
+Compose the frontend reaches the backend by its service name, configured via
+`VITE_PROXY_TARGET=http://backend:8000` (see `docker-compose.yml`); for local
+development outside Docker it defaults to `http://localhost:8000`.
+
+> **After changing `docker-compose.yml` or pulling new commits**, recreate the
+> containers so they pick up the changes:
+> ```bash
+> docker-compose up --build --force-recreate
+> ```
+
 ### Option 2 — Local development
 
 **Backend**
@@ -100,6 +111,18 @@ npm install
 npm run dev
 # → http://localhost:5173
 ```
+
+### Troubleshooting
+
+- **F1 Track Library is empty / API calls fail under Docker Compose** — the
+  frontend container can't reach the backend. Make sure the frontend was
+  recreated after the proxy config changed:
+  `docker-compose up --build --force-recreate`. Verify the backend directly with
+  `curl http://localhost:8000/tracks/library`.
+- **Backend returns 500 on `/tracks/library`** — check the backend logs
+  (`docker-compose logs --tail=50 backend`). The bundled circuit data lives in
+  `data/tracks/f1/`; a stale container that predates it needs a rebuild
+  (`docker-compose up --build`).
 
 ---
 
