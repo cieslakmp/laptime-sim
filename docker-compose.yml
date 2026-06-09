@@ -20,6 +20,9 @@ services:
       - ./frontend:/app
       - /app/node_modules
     working_dir: /app
+    environment:
+      # Reach the backend by its compose service name, not localhost.
+      - VITE_PROXY_TARGET=http://backend:8000
     command: npm run dev -- --host
     depends_on:
       - backend

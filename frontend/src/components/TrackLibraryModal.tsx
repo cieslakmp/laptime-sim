@@ -30,7 +30,7 @@ export default function TrackLibraryModal({ open, onClose, onSelect }: Props) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error: queryError } = useQuery({
     queryKey: ["library-tracks"],
     queryFn: listLibraryTracks,
     enabled: open,
@@ -105,6 +105,17 @@ export default function TrackLibraryModal({ open, onClose, onSelect }: Props) {
             {isLoading && (
               <div className="p-4 text-sm text-gray-500">Loading circuits…</div>
             )}
+            {isError && (
+              <div className="p-4 text-sm text-red-400">
+                Failed to load the track library.
+                <div className="mt-1 text-xs text-red-300/80 break-words">
+                  {String(queryError)}
+                </div>
+                <div className="mt-2 text-xs text-gray-500">
+                  Is the backend running and reachable from the dev server?
+                </div>
+              </div>
+            )}
             {filtered.map((t) => (
               <button
                 key={t.id}
@@ -122,7 +133,7 @@ export default function TrackLibraryModal({ open, onClose, onSelect }: Props) {
                 </div>
               </button>
             ))}
-            {!isLoading && filtered.length === 0 && (
+            {!isLoading && !isError && filtered.length === 0 && (
               <div className="p-4 text-sm text-gray-500">No circuits match “{query}”.</div>
             )}
           </div>
