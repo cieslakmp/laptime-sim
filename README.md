@@ -1,6 +1,6 @@
 # Lap Time Simulator
 
-A physics-based lap time simulator and racing line optimiser with an interactive web dashboard. Upload any track geometry, tune vehicle parameters in real time, and compare three levels of optimisation — from a millisecond QSS pass to a full optimal control problem solved with CasADi + IPOPT.
+A physics-based lap time simulator and racing line optimiser with an interactive web dashboard. Upload any track geometry, tune vehicle parameters in real time, and compare four levels of modelling — from a millisecond QSS pass, through a full optimal control problem solved with CasADi + IPOPT, to a transient 7DOF time-domain simulation with a Pacejka Magic Formula tyre model.
 
 ![Dashboard](docs/img/dashboard.png)
 
@@ -11,9 +11,11 @@ A physics-based lap time simulator and racing line optimiser with an interactive
 - **Quasi-Steady-State (QSS) simulation** — O(N) forward/backward pass, solves a full lap in milliseconds
 - **Minimum-curvature racing line** — geometric optimiser that finds the smoothest path through the track width
 - **Full optimal control (OCP)** — minimum-time direct multiple shooting (CasADi + IPOPT) in curvilinear coordinates; simultaneous optimisation of racing line and velocity profile
+- **Transient 7DOF + Pacejka simulation** — time-domain forward integration of a chassis with yaw, roll, pitch and heave dynamics, four wheel-spin DOF, dynamic load transfer and a simplified Pacejka Magic Formula tyre (camber thrust, self-aligning moment, combined slip). A path-following driver tracks the QSS reference, exposing transient behaviour the quasi-steady solvers cannot
 - **Point-mass vehicle model** — traction ellipse with speed-dependent downforce and drag, power-limited acceleration, parametric for any category (kart, Formula, GT, …)
-- **Interactive web dashboard** — dark-themed React 18 UI; adjust vehicle sliders and overlay all three methods at once
-- **REST API** — upload tracks, run simulations, and trigger optimisation programmatically via FastAPI
+- **Validation & analysis tooling** — solver comparison, GGV envelope extraction, and load-transfer / yaw / roll trace plots
+- **Interactive web dashboard** — dark-themed React 18 UI; adjust vehicle sliders and overlay all methods at once
+- **REST API** — upload tracks, run simulations, and trigger optimisation/simulation programmatically via FastAPI
 - **CSV and GPX track loading** — bring your own circuit data; GPX files are automatically geo-referenced
 
 ---
@@ -106,7 +108,8 @@ npm run dev
 2. **Adjust vehicle parameters** — sliders for mass, power, tyre friction, downforce, and drag.
 3. **QSS Simulate** — millisecond lap time on the centreline. Good starting point.
 4. **Racing Line** — minimum-curvature optimiser (~20–30 s). Overlays optimised path on the track map.
-5. **Full OCP** — CasADi + IPOPT optimal control (~1–3 min). Returns the globally optimal velocity and path profile. The sidebar shows all three lap times and the best delta vs QSS.
+5. **Full OCP** — CasADi + IPOPT optimal control (~1–3 min). Returns the globally optimal velocity and path profile. The sidebar shows all lap times and the best delta vs QSS.
+6. **Transient 7DOF** — time-domain Pacejka simulation (~30–60 s) that drives the racing line with a path-following controller. Overlays the transient velocity profile and reports whether the lap stayed on track.
 
 ---
 
@@ -193,6 +196,21 @@ curl -X POST http://localhost:8000/ocp \
 #                  "solve_time_s": 3.1, "solver_status": "optimal", ...}}
 ```
 
+### Transient 7DOF simulation
+
+```bash
+curl -X POST http://localhost:8000/transient \
+     -H "Content-Type: application/json" \
+     -d '{"track_id": "a3f9c2b1d4e8", "use_racing_line": true,
+          "vehicle": {"chassis": {"mass_kg": 1300}, "drivetrain": {"p_max_kw": 350}}}'
+# → {"qss_lap_time_s": 62.25, "transient_lap_time_s": 75.71, "delta_s": 13.46,
+#    "completed": true,
+#    "transient": {"x_path": [...], "y_path": [...], "v_ms": [...],
+#                  "max_lateral_dev_m": 1.12, "aborted": false, ...}}
+```
+
+The `vehicle` field accepts the nested `DynamicVehicleParams`; any omitted sub-fields fall back to defaults.
+
 ---
 
 ## Python Library
@@ -264,6 +282,54 @@ Discretised with **direct multiple shooting** (N = 150 intervals, RK4 integratio
 
 ---
 
+## Transient 7DOF + Pacejka Simulation
+
+Where QSS and OCP are *quasi-steady* (they assume the vehicle is always in instantaneous equilibrium), the transient solver integrates the vehicle's equations of motion **in the time domain**, revealing yaw response, weight-transfer settling and individual-wheel saturation.
+
+**Model** — a rigid sprung mass on four corner springs/dampers and anti-roll bars:
+
+- **Chassis** — longitudinal, lateral and yaw motion
+- **Suspension DOF** — roll, pitch and heave, so load transfer is *dynamic* (spring/damper), not algebraic
+- **Wheels** — four wheel-spin DOF driven by engine/brake torque and tyre reaction
+- **Tyres** — a simplified **Pacejka Magic Formula**: load-sensitive peak, lateral relaxation length (as ODE states), camber thrust from body roll, a self-aligning moment via the pneumatic trail, and Magic Formula cosine combined-slip weighting
+
+A **path-following driver** (pure-pursuit + Stanley steering, PI speed control with braking preview and traction budgeting) tracks the QSS racing line and velocity profile, so the transient lap time is directly comparable to the quasi-steady baseline — typically a little slower, as a real driver tracking the line would be.
+
+```python
+from laptime.track.loader import load_csv
+from laptime.optimizer.racing_line import MinCurvatureOptimizer
+from laptime.sim.qss import QSSSolver
+from laptime.sim.transient import TransientSolver
+from laptime.vehicle.dynamic_vehicle import DynamicVehicle
+from laptime.vehicle.dynamics_params import DynamicVehicleParams
+
+track   = load_csv("data/tracks/example_circuit.csv")
+vehicle = DynamicVehicle(DynamicVehicleParams.from_toml("data/vehicles/gt_car_dynamic.toml"))
+
+opt  = MinCurvatureOptimizer(track)
+line = opt.apply_to_track(opt.optimize())          # the reference racing line
+qss  = QSSSolver(line, vehicle, ds=2.0).solve()    # reference speed target
+
+result = TransientSolver(line, vehicle, qss, racing_line=line).solve()
+print(f"Transient lap: {result.lap_time_s:.3f} s  "
+      f"(completed={result.metadata['completed']}, "
+      f"max dev {result.metadata['max_lateral_dev_m']:.2f} m)")
+```
+
+The full 7DOF parameter set (chassis inertias, suspension rates, drivetrain, tyre coefficients, driver gains) is configured via nested TOML — see `data/vehicles/gt_car_dynamic.toml`.
+
+### Validation & analysis
+
+`laptime/analysis.py` and `scripts/analysis_demo.py` provide tooling to compare the solvers and inspect the transient dynamics:
+
+```bash
+python scripts/analysis_demo.py data/tracks/example_circuit.csv analysis_output/
+```
+
+This renders a QSS-vs-transient velocity profile, the transient lap's **GG cloud against the steady-state GGV envelope**, and a chassis-response time history (per-wheel load transfer, yaw rate, roll).
+
+---
+
 ## Architecture
 
 ```
@@ -275,12 +341,19 @@ laptime-sim/
 │   │   └── loader.py          CSV / GPX → Track
 │   ├── vehicle/
 │   │   ├── base.py            VehicleModel ABC
-│   │   └── point_mass.py      Traction ellipse + aero + powertrain
+│   │   ├── point_mass.py      Traction ellipse + aero + powertrain
+│   │   ├── tyre_pacejka.py    Simplified Pacejka Magic Formula tyre
+│   │   ├── suspension.py      Roll/pitch/heave dynamic load transfer
+│   │   ├── dynamic_vehicle.py 7DOF chassis derivatives + steady-state shim
+│   │   └── dynamics_params.py Nested 7DOF parameter set (TOML)
 │   ├── sim/
-│   │   └── qss.py             QSS forward/backward solver
+│   │   ├── qss.py             QSS forward/backward solver
+│   │   ├── driver.py          Path-following driver model
+│   │   └── transient.py       Transient 7DOF time-domain solver
 │   ├── optimizer/
 │   │   ├── racing_line.py     Min-curvature SLSQP
 │   │   └── ocp.py             Full OCP — CasADi + IPOPT
+│   ├── analysis.py            GGV envelope, solver comparison, traces
 │   ├── viz/                   Matplotlib helpers
 │   └── api/
 │       ├── main.py            FastAPI app
@@ -288,7 +361,8 @@ laptime-sim/
 │           ├── tracks.py      POST /tracks, GET /tracks/{id}
 │           ├── simulate.py    POST /simulate
 │           ├── optimize.py    POST /optimize
-│           └── ocp.py         POST /ocp
+│           ├── ocp.py         POST /ocp
+│           └── transient.py   POST /transient
 ├── frontend/                  React 18 + TypeScript
 │   └── src/
 │       ├── App.tsx
@@ -298,7 +372,8 @@ laptime-sim/
 │           ├── VelocityProfile.tsx
 │           ├── GGDiagram.tsx
 │           └── VehicleForm.tsx
-├── tests/                     20 pytest cases
+├── scripts/                   analysis_demo.py — comparison & trace figures
+├── tests/                     45 pytest cases
 ├── data/                      Example tracks + vehicle configs
 └── docker-compose.yml
 ```
@@ -307,7 +382,7 @@ laptime-sim/
 
 **Arc-length as the universal coordinate** — all modules share the `s`-axis. This makes the OCP dynamics natural and keeps the QSS, racing line, and OCP results directly comparable.
 
-**`VehicleModel` ABC** — the QSS solver only calls `lateral_limit(v)` and `longitudinal_limits(v, ay)`. The OCP replicates the same physics symbolically in CasADi. Both are derived from the same `PointMassParams`.
+**`VehicleModel` ABC** — the QSS solver only calls `lateral_limit(v)` and `longitudinal_limits(v, ay)`. The OCP replicates the same physics symbolically in CasADi. The transient `DynamicVehicle` *also* implements this ABC (exposing a steady-state grip estimate of its own 7DOF physics), so a single parameter set drives both the QSS reference and the time-domain simulation.
 
 **QSS warm-start for the OCP** — the OCP is warm-started from the QSS velocity profile (`n=0`, `ψ=0`, `v=v_QSS`). This typically achieves convergence in one IPOPT pass.
 
@@ -316,8 +391,8 @@ laptime-sim/
 ## Development
 
 ```bash
-pytest                          # 20 tests
-pytest tests/sim/test_ocp.py    # OCP tests only
+pytest                          # 45 tests (OCP tests need the optional [ocp] extra)
+pytest tests/sim/test_transient.py   # transient 7DOF tests only
 ruff check laptime/
 mypy laptime/
 ```
@@ -332,8 +407,8 @@ mypy laptime/
 | 2 — REST API | ✅ Done | FastAPI: tracks, simulate, optimise endpoints |
 | 3 — Web dashboard | ✅ Done | React 18 + Plotly dark UI |
 | 4 — Full OCP | ✅ Done | CasADi + IPOPT direct multiple shooting |
-| 5 — GGV vehicle | Planned | Speed-dependent 3-D lookup table |
-| 6 — Bicycle model | Planned | Kinematic single-track model |
+| 5 — Transient 7DOF + Pacejka | ✅ Done | Time-domain simulation with Magic Formula tyres and a path-following driver |
+| 6 — Validation & analysis | ✅ Done | Solver comparison, GGV envelope, load-transfer/yaw/roll traces |
 | 7 — Parameter sweep | Planned | Vectorised setup sensitivity / tornado plots |
 
 ---
