@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from laptime.vehicle.dynamics_params import DynamicVehicleParams
+
 
 class VehicleParamsRequest(BaseModel):
     mass_kg: float = Field(default=700.0, gt=0)
@@ -78,3 +80,29 @@ class OCPResponse(BaseModel):
     delta_s: float
     baseline: SimulateResponse
     optimized: OCPSimResult
+
+
+class TransientRequest(BaseModel):
+    track_id: str
+    vehicle: DynamicVehicleParams = Field(default_factory=DynamicVehicleParams)
+    ds: float = Field(default=2.0, gt=0, description="QSS reference resolution [m]")
+    dt: float = Field(default=2.5e-3, gt=0, description="Time-domain integration step [s]")
+    use_racing_line: bool = Field(default=True, description="Track the min-curvature racing line")
+
+
+class TransientSimResult(SimulateResponse):
+    """SimulateResponse extended with the transient path and run diagnostics."""
+    x_path: list[float]                # followed-line x coordinates [m]
+    y_path: list[float]                # followed-line y coordinates [m]
+    completed: bool
+    aborted: bool
+    max_lateral_dev_m: float
+
+
+class TransientResponse(BaseModel):
+    qss_lap_time_s: float
+    transient_lap_time_s: float
+    delta_s: float
+    completed: bool
+    baseline: SimulateResponse         # QSS on the reference line
+    transient: TransientSimResult

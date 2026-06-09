@@ -62,6 +62,23 @@ export interface OCPResult {
   optimized: OCPSimResult;
 }
 
+export interface TransientSimResult extends SimResult {
+  x_path: number[];
+  y_path: number[];
+  completed: boolean;
+  aborted: boolean;
+  max_lateral_dev_m: number;
+}
+
+export interface TransientResult {
+  qss_lap_time_s: number;
+  transient_lap_time_s: number;
+  delta_s: number;
+  completed: boolean;
+  baseline: SimResult;
+  transient: TransientSimResult;
+}
+
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const err = await res.text();
@@ -117,4 +134,28 @@ export async function optimizeRacingLine(
     body: JSON.stringify({ track_id: trackId, vehicle, ds, n_racing_line_points: nPoints }),
   });
   return json<OptimizeResult>(res);
+}
+
+export async function solveTransient(
+  trackId: string,
+  vehicle: VehicleParams,
+  useRacingLine = true
+): Promise<TransientResult> {
+  // Map the shared point-mass form fields onto the nested 7DOF parameter set;
+  // the backend fills the remaining suspension/tyre/driver fields from defaults.
+  const body = {
+    track_id: trackId,
+    use_racing_line: useRacingLine,
+    vehicle: {
+      chassis: { mass_kg: vehicle.mass_kg },
+      drivetrain: { p_max_kw: vehicle.p_max_kw },
+      aero: { cd: vehicle.cd, cl: Math.max(vehicle.cl, 0) },
+    },
+  };
+  const res = await fetch(`${BASE}/transient`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return json<TransientResult>(res);
 }
