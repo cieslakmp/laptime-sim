@@ -30,8 +30,8 @@ export default function VelocityProfile({ series }: Props) {
         plot_bgcolor: "rgba(0,0,0,0)",
         font: { color: "#e5e7eb" },
         margin: { t: 30, b: 50, l: 60, r: 20 },
-        xaxis: { title: "Arc-length [m]", gridcolor: "#374151" },
-        yaxis: { title: "Speed [km/h]", gridcolor: "#374151" },
+        xaxis: { title: { text: "Arc-length [m]" }, gridcolor: "#374151" },
+        yaxis: { title: { text: "Speed [km/h]" }, gridcolor: "#374151" },
         title: { text: "Velocity Profile", font: { size: 14 } },
         legend: { bgcolor: "rgba(0,0,0,0)", font: { size: 11 } },
       }}
