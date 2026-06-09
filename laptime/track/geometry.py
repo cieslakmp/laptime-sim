@@ -30,11 +30,14 @@ def fit_spline(
 def arc_length_parameterise(
     tck: tuple,
     n: int = 1000,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    return_u: bool = False,
+) -> tuple:
     """Sample spline at n uniform arc-length stations.
 
-    Returns (s, x, y) arrays of shape (n,).
-    s is cumulative arc-length in metres starting at 0.
+    Returns (s, x, y) arrays of shape (n,), or (s, x, y, u) when ``return_u`` is set.
+    s is cumulative arc-length in metres starting at 0. ``u`` is the spline parameter
+    at each arc-length station — pass it to :func:`compute_heading` /
+    :func:`compute_curvature` so those quantities stay consistent with (x, y).
     """
     # Sample densely first to compute arc-length accurately
     u_dense = np.linspace(0, 1, 10 * n)
@@ -47,6 +50,8 @@ def arc_length_parameterise(
     u_uniform = np.interp(s_uniform, s_dense, u_dense)
 
     x, y = splev(u_uniform, tck)
+    if return_u:
+        return s_uniform, x, y, u_uniform
     return s_uniform, x, y
 
 
