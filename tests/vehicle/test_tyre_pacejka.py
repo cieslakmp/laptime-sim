@@ -1,9 +1,11 @@
 """Tests for the simplified Pacejka tyre model."""
 
 import numpy as np
+import pytest
 
 from laptime.vehicle.tyre_pacejka import (
     PacejkaCoeffs,
+    aligning_moment,
     combined_forces,
     pure_lateral_fy,
     pure_longitudinal_fx,
@@ -76,6 +78,31 @@ def test_combined_recovers_pure_cases():
     fx, fy = combined_forces(0.1, 0.0, FZ0, c)
     assert np.isclose(fy, pure_lateral_fy(0.1, FZ0, c))
     assert abs(fx) < 1e-9
+
+
+def test_combined_slip_derates_orthogonal_force():
+    """Adding slip ratio must reduce the lateral force (MF cosine weighting)."""
+    c = PacejkaCoeffs()
+    _, fy_pure = combined_forces(0.1, 0.0, FZ0, c)
+    _, fy_combined = combined_forces(0.1, 0.15, FZ0, c)
+    assert abs(fy_combined) < abs(fy_pure)
+
+
+def test_camber_adds_lateral_thrust():
+    """At zero slip a positive camber produces a positive lateral (camber-thrust) force."""
+    c = PacejkaCoeffs()
+    assert pure_lateral_fy(0.0, FZ0, c, gamma=0.0) == 0.0
+    assert pure_lateral_fy(0.0, FZ0, c, gamma=0.05) > 0.0
+    assert pure_lateral_fy(0.0, FZ0, c, gamma=-0.05) < 0.0
+
+
+def test_aligning_moment_opposes_lateral_force():
+    """Self-aligning moment acts to restore (opposite sign to the lateral force)."""
+    c = PacejkaCoeffs()
+    fy = pure_lateral_fy(0.1, FZ0, c)  # negative (restoring)
+    mz = aligning_moment(fy, c)
+    assert np.sign(mz) == -np.sign(fy)
+    assert abs(mz) == pytest.approx(c.pneumatic_trail_m * abs(fy))
 
 
 def test_lift_off_wheel_carries_no_force():

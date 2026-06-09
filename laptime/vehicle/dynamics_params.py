@@ -38,6 +38,8 @@ class SuspensionParams(BaseModel):
     c_damp_rear_ns_m: Positive = Field(default=3800.0, description="Rear damping [N·s/m]")
     k_arb_front_nm_rad: float = Field(default=30000.0, description="Front anti-roll rate [N·m/rad]")
     k_arb_rear_nm_rad: float = Field(default=20000.0, description="Rear anti-roll rate [N·m/rad]")
+    camber_gain_per_roll: float = Field(
+        default=0.5, description="Tyre camber gained per unit body roll [rad/rad]")
     use_heave: bool = Field(default=True, description="Include the heave DOF")
 
 

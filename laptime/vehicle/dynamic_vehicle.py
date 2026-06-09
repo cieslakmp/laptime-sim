@@ -33,7 +33,7 @@ import numpy as np
 from .base import VehicleModel
 from .dynamics_params import DynamicVehicleParams
 from .suspension import G, SuspensionModel
-from .tyre_pacejka import PacejkaCoeffs, combined_forces
+from .tyre_pacejka import PacejkaCoeffs, aligning_moment, combined_forces
 
 # State layout
 I_VX, I_VY, I_R = 0, 1, 2
@@ -128,11 +128,18 @@ class DynamicVehicle(VehicleModel):
             alpha_eff = alpha_raw
             rate = np.zeros(4)
 
+        # Roll-induced camber (same lean for all wheels relative to the road).
+        gamma = p.suspension.camber_gain_per_roll * phi * np.ones(4)
+
         # --- tyre forces (wheel frame), front and rear coefficient sets ---
-        fx_f, fy_f = combined_forces(alpha_eff[:2], kappa[:2], fz[:2], p.tyre_front)
-        fx_r, fy_r = combined_forces(alpha_eff[2:], kappa[2:], fz[2:], p.tyre_rear)
+        fx_f, fy_f = combined_forces(alpha_eff[:2], kappa[:2], fz[:2], p.tyre_front, gamma[:2])
+        fx_r, fy_r = combined_forces(alpha_eff[2:], kappa[2:], fz[2:], p.tyre_rear, gamma[2:])
         fx_w = np.concatenate([fx_f, fx_r])
         fy_w = np.concatenate([fy_f, fy_r])
+
+        # Self-aligning moments about each tyre's vertical axis (pneumatic trail).
+        mz_align = float(np.sum(aligning_moment(fy_f, p.tyre_front))
+                         + np.sum(aligning_moment(fy_r, p.tyre_rear)))
 
         # Rotate tyre forces back into the body frame (front wheels by +delta).
         delta_w = np.array([delta, delta, 0.0, 0.0])
@@ -144,7 +151,7 @@ class DynamicVehicle(VehicleModel):
         m = p.chassis.mass_kg
         sum_fx = float(np.sum(fx_b)) - self._drag_force(vx)
         sum_fy = float(np.sum(fy_b))
-        mz = float(np.sum(self.x_wheel * fy_b - self.y_wheel * fx_b))
+        mz = float(np.sum(self.x_wheel * fy_b - self.y_wheel * fx_b)) + mz_align
         ax_spec = sum_fx / m
         ay_spec = sum_fy / m
 
