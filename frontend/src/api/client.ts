@@ -19,6 +19,21 @@ export interface TrackInfo {
   n_points: number;
 }
 
+export interface LibraryTrack {
+  id: string;
+  name: string;
+  location: string;
+  country: string;
+  country_code: string;
+  flag: string;
+  official_length_m: number | null;
+  measured_length_m: number;
+  opened: number | null;
+  first_gp: number | null;
+  altitude_m: number | null;
+  outline: { x: number[]; y: number[] };
+}
+
 export interface TrackDetail extends TrackInfo {
   id: string;
   x: number[];
@@ -97,6 +112,16 @@ export async function uploadTrack(file: File): Promise<TrackInfo> {
 export async function getTrackDetail(trackId: string): Promise<TrackDetail> {
   const res = await fetch(`${BASE}/tracks/${trackId}`);
   return json<TrackDetail>(res);
+}
+
+export async function listLibraryTracks(): Promise<LibraryTrack[]> {
+  const res = await fetch(`${BASE}/tracks/library`);
+  return json<LibraryTrack[]>(res);
+}
+
+export async function loadLibraryTrack(circuitId: string): Promise<TrackInfo> {
+  const res = await fetch(`${BASE}/tracks/library/${circuitId}`, { method: "POST" });
+  return json<TrackInfo>(res);
 }
 
 export async function simulate(trackId: string, vehicle: VehicleParams, ds = 2): Promise<SimResult> {

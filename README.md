@@ -16,6 +16,7 @@ A physics-based lap time simulator and racing line optimiser with an interactive
 - **Validation & analysis tooling** — solver comparison, GGV envelope extraction, and load-transfer / yaw / roll trace plots
 - **Interactive web dashboard** — dark-themed React 18 UI; adjust vehicle sliders and overlay all methods at once
 - **REST API** — upload tracks, run simulations, and trigger optimisation/simulation programmatically via FastAPI
+- **Built-in F1 track library** — pick from 40 real Formula 1 circuits (Monza, Spa, Monaco, Suzuka, …) in a searchable pop-up with a geometry preview and circuit details; no data file needed
 - **CSV and GPX track loading** — bring your own circuit data; GPX files are automatically geo-referenced
 
 ---
@@ -104,7 +105,7 @@ npm run dev
 
 ## Using the Dashboard
 
-1. **Upload a track** — click *Upload Track (CSV/GPX)* and select a file. The track map renders immediately.
+1. **Choose a track** — click *F1 Track Library* to pick a real Formula 1 circuit (search by name, city, or country; preview the layout and details, then *Load this track*), or *Upload Track (CSV/GPX)* to load your own. The track map renders immediately.
 2. **Adjust vehicle parameters** — sliders for mass, power, tyre friction, downforce, and drag.
 3. **QSS Simulate** — millisecond lap time on the centreline. Good starting point.
 4. **Racing Line** — minimum-curvature optimiser (~20–30 s). Overlays optimised path on the track map.
@@ -165,6 +166,21 @@ curl -X POST http://localhost:8000/tracks \
      -F "file=@data/tracks/example_circuit.csv"
 # → {"track_id": "a3f9c2b1d4e8", "length_m": 2783.4, ...}
 ```
+
+### Use the built-in F1 library
+
+```bash
+# List the bundled circuits (metadata + preview outline)
+curl http://localhost:8000/tracks/library
+# → [{"id": "it-1922", "name": "Autodromo Nazionale Monza", "country": "Italy", ...}, ...]
+
+# Load one for simulation — returns a track_id like an upload
+curl -X POST http://localhost:8000/tracks/library/it-1922
+# → {"track_id": "5b155543fb58", "name": "Autodromo Nazionale Monza", "length_m": 5792.9, ...}
+```
+
+Circuit geometry is bundled under `data/tracks/f1/` — see
+[`data/tracks/f1/SOURCE.md`](data/tracks/f1/SOURCE.md) for the source and licence.
 
 ### QSS simulation
 
