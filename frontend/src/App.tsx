@@ -6,12 +6,14 @@ import {
   simulate,
   optimizeRacingLine,
   solveOCP,
+  solveTransient,
   type VehicleParams,
   type SimResult,
   type TrackInfo,
   type OptimizeResult,
   type OCPResult,
   type OCPSimResult,
+  type TransientResult,
 } from "./api/client";
 import VehicleForm from "./components/VehicleForm";
 import TrackMap from "./components/TrackMap";
@@ -36,6 +38,7 @@ export default function App() {
   const [simResult, setSimResult] = useState<SimResult | null>(null);
   const [optResult, setOptResult] = useState<OptimizeResult | null>(null);
   const [ocpResult, setOcpResult] = useState<OCPResult | null>(null);
+  const [transientResult, setTransientResult] = useState<TransientResult | null>(null);
   const [status, setStatus] = useState<string>("");
   const [error, setError] = useState<string>("");
 
@@ -49,6 +52,7 @@ export default function App() {
     setSimResult(null);
     setOptResult(null);
     setOcpResult(null);
+    setTransientResult(null);
     setError("");
   };
 
@@ -118,6 +122,26 @@ export default function App() {
     }
   }, [trackInfo, vehicle]);
 
+  const handleTransient = useCallback(async () => {
+    if (!trackInfo) return;
+    clearResults();
+    setStatus("Running transient 7DOF simulation (~30–60 s)...");
+    try {
+      const result = await solveTransient(trackInfo.track_id, vehicle);
+      setTransientResult(result);
+      setSimResult(result.baseline);
+      const offTrack = result.completed ? "" : "  ·  ⚠ lap did not complete (ran wide)";
+      setStatus(
+        `Transient 7DOF: ${result.transient_lap_time_s.toFixed(3)} s  ` +
+        `(Δ ${result.delta_s.toFixed(3)} s vs QSS)  ·  ` +
+        `max dev ${result.transient.max_lateral_dev_m.toFixed(2)} m${offTrack}`
+      );
+    } catch (err) {
+      setError(String(err));
+      setStatus("");
+    }
+  }, [trackInfo, vehicle]);
+
   // Build velocity-profile series
   const series: { result: SimResult; label: string; color: string }[] = [];
   if (simResult) {
@@ -129,9 +153,13 @@ export default function App() {
   if (ocpResult) {
     series.push({ result: ocpResult.optimized, label: "OCP optimal", color: "#22d3ee" });
   }
+  if (transientResult) {
+    series.push({ result: transientResult.transient, label: "Transient 7DOF", color: "#a3e635" });
+  }
 
   // Primary result for track map colouring
-  const primaryResult = ocpResult?.optimized ?? optResult?.optimized ?? simResult;
+  const primaryResult =
+    transientResult?.transient ?? ocpResult?.optimized ?? optResult?.optimized ?? simResult;
   const ocpSim = ocpResult ? (ocpResult.optimized as OCPSimResult) : undefined;
 
   // Sidebar lap time rows
@@ -139,6 +167,7 @@ export default function App() {
   if (simResult) lapTimes.push({ label: "QSS", time: simResult.lap_time_s, color: "text-indigo-300" });
   if (optResult) lapTimes.push({ label: "Racing line", time: optResult.optimized_lap_time_s, color: "text-orange-300" });
   if (ocpResult) lapTimes.push({ label: "OCP optimal", time: ocpResult.optimized_lap_time_s, color: "text-cyan-300" });
+  if (transientResult) lapTimes.push({ label: "Transient 7DOF", time: transientResult.transient_lap_time_s, color: "text-lime-300" });
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -171,6 +200,14 @@ export default function App() {
           title="Full optimal control problem (CasADi + IPOPT) — takes 1–3 minutes"
         >
           Full OCP
+        </button>
+        <button
+          onClick={handleTransient}
+          disabled={!trackInfo}
+          className="bg-lime-700 hover:bg-lime-600 disabled:opacity-40 text-sm px-4 py-1.5 rounded transition font-semibold"
+          title="Transient 7DOF + Pacejka time-domain simulation — takes ~30–60 s"
+        >
+          Transient 7DOF
         </button>
       </header>
 

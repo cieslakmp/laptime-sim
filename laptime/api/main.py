@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import optimize, ocp, simulate, tracks
+from .routes import ocp, optimize, simulate, tracks, transient
 
 app = FastAPI(
     title="Lap Time Simulator API",
@@ -22,6 +22,7 @@ app.include_router(tracks.router, prefix="/tracks", tags=["tracks"])
 app.include_router(simulate.router, prefix="/simulate", tags=["simulate"])
 app.include_router(optimize.router, prefix="/optimize", tags=["optimize"])
 app.include_router(ocp.router, prefix="/ocp", tags=["ocp"])
+app.include_router(transient.router, prefix="/transient", tags=["transient"])
 
 
 @app.get("/health")

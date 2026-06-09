@@ -61,8 +61,22 @@ class MinCurvatureOptimizer:
         )
         return result.x
 
-    def apply_to_track(self, alpha: np.ndarray) -> Track:
-        """Return a new Track representing the racing line."""
+    def apply_to_track(self, alpha: np.ndarray, ds: float = 2.0,
+                       path_smooth: float = 1.0) -> Track:
+        """Return a new Track representing the racing line.
+
+        The line is resampled at ``ds`` metre spacing (finer than the optimisation grid)
+        so downstream consumers such as the transient driver can track it smoothly — a
+        coarse path makes the path-following controller unstable.
+
+        ``path_smooth`` is a Gaussian smoothing (in optimisation-grid stations) applied to
+        the path *coordinates* before refitting. Smoothing the geometry — rather than just
+        the curvature array — keeps the reported curvature consistent with the actual path,
+        which both removes spline-interpolation wiggle and keeps the QSS speed achievable by
+        a vehicle that physically drives the line.
+        """
+        from scipy.ndimage import gaussian_filter1d
+
         from laptime.track.track import Track
 
         track = self._base
@@ -79,17 +93,34 @@ class MinCurvatureOptimizer:
         x_new = track.x + offset * nx
         y_new = track.y + offset * ny
 
-        # Recompute curvature on the new line
-        from laptime.track.geometry import compute_curvature, fit_spline, arc_length_parameterise
+        # Smooth the path coordinates so the refitted line is genuinely smooth.
+        if path_smooth > 0:
+            mode = "wrap" if track.is_closed else "nearest"
+            x_new = gaussian_filter1d(x_new, path_smooth, mode=mode)
+            y_new = gaussian_filter1d(y_new, path_smooth, mode=mode)
+
+        # Recompute geometry on the new line at fine arc-length spacing. heading/curvature
+        # must be evaluated at the arc-length-mapped parameter u (not a raw uniform u) so
+        # they stay consistent with (x_fit, y_fit) on non-uniform parameterisations.
+        from laptime.track.geometry import (
+            arc_length_parameterise,
+            compute_curvature,
+            compute_heading,
+            fit_spline,
+        )
 
         tck, _ = fit_spline(x_new, y_new, closed=track.is_closed)
-        n = self._n
-        u = np.linspace(0, 1, n, endpoint=False)
-        s_new, x_fit, y_fit = arc_length_parameterise(tck, n=n)
-        kappa_new = compute_curvature(tck, u, smooth_sigma=1.0)
-
-        from laptime.track.geometry import compute_heading
+        n_out = max(self._n, int(track.length / ds))
+        s_new, x_fit, y_fit, u = arc_length_parameterise(tck, n=n_out, return_u=True)
+        # Light curvature denoising only — the path smoothing above already shapes the line,
+        # so this must stay small to keep kappa consistent with the geometry.
+        kappa_new = compute_curvature(tck, u, smooth_sigma=max(1.0, 4.0 / ds))
         heading_new = compute_heading(tck, u)
+
+        # Carry width/banking across to the finer grid.
+        width_left = np.interp(s_new, track.s, track.width_left)
+        width_right = np.interp(s_new, track.s, track.width_right)
+        banking = np.interp(s_new, track.s, track.banking)
 
         return Track(
             s=s_new,
@@ -97,9 +128,9 @@ class MinCurvatureOptimizer:
             y=y_fit,
             heading=heading_new,
             kappa=kappa_new,
-            width_left=track.width_left,
-            width_right=track.width_right,
-            banking=track.banking,
+            width_left=width_left,
+            width_right=width_right,
+            banking=banking,
             name=track.name + "_racing_line",
             is_closed=track.is_closed,
         )

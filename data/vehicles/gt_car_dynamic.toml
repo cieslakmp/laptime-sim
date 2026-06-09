@@ -22,6 +22,7 @@ c_damp_front_ns_m = 4000.0
 c_damp_rear_ns_m = 3800.0
 k_arb_front_nm_rad = 30000.0
 k_arb_rear_nm_rad = 20000.0
+camber_gain_per_roll = 0.5
 use_heave = true
 
 [vehicle.drivetrain]
@@ -58,6 +59,10 @@ D_x_mu = 1.6
 E_x = -0.5
 Fz0_n = 3500.0
 k_load = 0.10
+camber_stiffness = 0.6
+pneumatic_trail_m = 0.04
+B_xalpha = 4.0
+B_ykappa = 4.0
 
 [vehicle.tyre_rear]
 B_y = 10.0
@@ -70,3 +75,7 @@ D_x_mu = 1.6
 E_x = -0.5
 Fz0_n = 3500.0
 k_load = 0.10
+camber_stiffness = 0.6
+pneumatic_trail_m = 0.04
+B_xalpha = 4.0
+B_ykappa = 4.0
