@@ -295,6 +295,12 @@ Where QSS and OCP are *quasi-steady* (they assume the vehicle is always in insta
 
 A **path-following driver** (pure-pursuit + Stanley steering, PI speed control with braking preview and traction budgeting) tracks the QSS racing line and velocity profile, so the transient lap time is directly comparable to the quasi-steady baseline — typically a little slower, as a real driver tracking the line would be.
 
+![Transient 7DOF overlay](docs/img/transient_dashboard.png)
+
+The transient velocity profile overlaid on the quasi-steady baselines — the time-domain car carries slightly less speed through the corners as the driver tracks the line:
+
+![Transient velocity overlay](docs/img/transient_velocity_overlay.png)
+
 ```python
 from laptime.track.loader import load_csv
 from laptime.optimizer.racing_line import MinCurvatureOptimizer
