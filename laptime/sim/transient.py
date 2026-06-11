@@ -130,7 +130,8 @@ class TransientSolver:
 
         pts = self._track.at(s_grid)
         kappa_grid = np.array([p.kappa for p in pts])
-        ax = np.gradient(v_grid, s_grid)
+        # Chain rule: ax = dv/dt = v * dv/ds  (np.gradient alone gives dv/ds [1/s])
+        ax = v_grid * np.gradient(v_grid, s_grid)
         ay = v_grid**2 * kappa_grid
 
         return LapResult(

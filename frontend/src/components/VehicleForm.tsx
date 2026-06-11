@@ -6,7 +6,7 @@ interface Props {
   onChange: (v: VehicleParams) => void;
 }
 
-interface SliderDef {
+export interface SliderDef {
   key: keyof VehicleParams;
   label: string;
   min: number;
@@ -15,7 +15,7 @@ interface SliderDef {
   unit: string;
 }
 
-const SLIDERS: SliderDef[] = [
+export const SLIDERS: SliderDef[] = [
   { key: "mass_kg", label: "Mass", min: 200, max: 1500, step: 10, unit: "kg" },
   { key: "p_max_kw", label: "Peak Power", min: 50, max: 1000, step: 10, unit: "kW" },
   { key: "f_brake_max_n", label: "Brake Force", min: 5000, max: 50000, step: 500, unit: "N" },

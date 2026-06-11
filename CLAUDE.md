@@ -105,15 +105,31 @@ may all need to stay consistent.
 
 ### API (`laptime/api/`)
 
-`main.py` mounts routers under `/tracks`, `/simulate`, `/optimize`, `/ocp`, `/transient`.
-Tracks live in an **in-memory registry** (`api/store.py`) keyed by a content hash
-`track_id`; every solve takes a `track_id` plus a vehicle param block (`api/schemas.py`,
-Pydantic). The transient route accepts the nested `DynamicVehicleParams`; the others take
-the flat point-mass `VehicleParamsRequest`.
+`main.py` mounts routers under `/tracks`, `/simulate`, `/optimize`, `/ocp`, `/transient`,
+`/sweep`. Tracks live in an **in-memory registry** (`api/store.py`) keyed by a content
+hash `track_id`; every solve takes a `track_id` plus a vehicle param block
+(`api/schemas.py`, Pydantic). The transient route accepts the nested
+`DynamicVehicleParams`; the others take the flat point-mass `VehicleParamsRequest`.
 
 Route-ordering gotcha in `routes/tracks.py`: literal paths (`/library`,
 `/library/{circuit_id}`) are declared **before** `/{track_id}` so they aren't captured as
-an id.
+an id. Same pattern in `routes/sweep.py` (`/saved` before `/{sweep_id}`).
+
+### Parameter sweep (`laptime/sweep/`)
+
+`POST /sweep` expands parameter ranges (`spec.py`: `grid` = cartesian product, **last
+param varies fastest** — the frontend heatmap reshapes row-major on this contract; or
+`one_at_a_time` for tornado sensitivity) and runs them on a background thread driving a
+per-sweep `ProcessPoolExecutor` (`runner.py`). The worker `run_sweep_point` is
+**module-level and receives only plain dicts/numpy arrays** (Windows spawn: no pydantic
+models or scipy interpolators cross the process boundary; `Track` is rebuilt from arrays
+in the child). The racing line is vehicle-independent, so `solver="racing_line"`
+optimises it once and runs QSS per point on the shared line. Progress is polled via
+`GET /sweep/{id}/status`; on completion results aggregate onto a common s-grid (velocity
+envelope min/max/spread, pooled G-G convex hull) and auto-save to `data/sweeps/{id}.json`
+(`persistence.py`) as **standalone** files embedding display-line geometry — saved sweeps
+list/load/render without the in-memory track registry surviving a restart. Env overrides:
+`LAPTIME_SWEEP_EXECUTOR=thread` (used by tests to avoid spawn cost), `LAPTIME_SWEEPS_DIR`.
 
 ### Built-in F1 track library
 
@@ -128,9 +144,11 @@ all solvers work unchanged. Data files are located relative to the package
 ### Frontend ↔ backend
 
 `frontend/src/api/client.ts` is the single API layer; `App.tsx` owns all state and
-composes the Plotly components (`TrackMap`, `VelocityProfile`, `GGDiagram`) plus
-`VehicleForm` and `TrackLibraryModal`. All requests are same-origin relative paths routed
-through the Vite proxy (see `vite.config.ts`).
+composes the Plotly components (`TrackMap`, `VelocityProfile`, `GGDiagram`,
+`LapTimeChart`) plus `VehicleForm` and the modals (`TrackLibraryModal`,
+`SweepConfigModal`, `SavedSweepsModal`). Sweep progress is polled with a react-query
+`refetchInterval`. All requests are same-origin relative paths routed through the Vite
+proxy (see `vite.config.ts`) — new API prefixes must be added there.
 
 ## Conventions
 

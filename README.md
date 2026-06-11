@@ -250,6 +250,33 @@ curl -X POST http://localhost:8000/transient \
 
 The `vehicle` field accepts the nested `DynamicVehicleParams`; any omitted sub-fields fall back to defaults.
 
+### Parameter sweep
+
+```bash
+curl -X POST http://localhost:8000/sweep \
+     -H "Content-Type: application/json" \
+     -d '{"track_id": "a3f9c2b1d4e8", "vehicle": {...}, "solver": "qss", "mode": "grid",
+          "params": [{"name": "mass_kg", "min": 500, "max": 900, "steps": 10},
+                     {"name": "p_max_kw", "min": 200, "max": 600, "steps": 10}]}'
+# → 202 {"sweep_id": "bb057a581efd", "total_runs": 101, "state": "running"}
+
+curl http://localhost:8000/sweep/bb057a581efd/status
+# → {"state": "running", "completed": 45, "total": 101, ...}
+
+curl http://localhost:8000/sweep/bb057a581efd          # full result once done
+curl http://localhost:8000/sweep/saved                 # list persisted sweeps
+curl http://localhost:8000/sweep/saved/bb057a581efd    # reload a saved sweep
+```
+
+Sweep points run in parallel across CPU cores (one process per worker). `mode` is either
+`grid` (cartesian product of all ranges) or `one_at_a_time` (each parameter varied alone —
+sensitivity/tornado analysis). A baseline run at the unmodified vehicle values is always
+included. `solver` may be `qss`, `racing_line` (line optimised once, vehicle-independent),
+`transient`, or `ocp`. Completed sweeps are auto-saved to `data/sweeps/` as standalone JSON
+(per-run lap times + velocity envelope + G-G hull + display-line geometry), so they can be
+listed, reloaded, and visualised after a server restart. `POST /sweep/{id}/cancel` stops a
+running sweep.
+
 ---
 
 ## Python Library
@@ -398,6 +425,10 @@ laptime-sim/
 │   ├── optimizer/
 │   │   ├── racing_line.py     Min-curvature SLSQP
 │   │   └── ocp.py             Full OCP — CasADi + IPOPT
+│   ├── sweep/
+│   │   ├── spec.py            Grid / one-at-a-time point expansion
+│   │   ├── runner.py          Parallel sweep execution + job registry
+│   │   └── persistence.py     Saved sweeps (data/sweeps/*.json)
 │   ├── analysis.py            GGV envelope, solver comparison, traces
 │   ├── viz/                   Matplotlib helpers
 │   └── api/
@@ -407,16 +438,20 @@ laptime-sim/
 │           ├── simulate.py    POST /simulate
 │           ├── optimize.py    POST /optimize
 │           ├── ocp.py         POST /ocp
-│           └── transient.py   POST /transient
+│           ├── transient.py   POST /transient
+│           └── sweep.py       POST /sweep + progress/saved endpoints
 ├── frontend/                  React 18 + TypeScript
 │   └── src/
 │       ├── App.tsx
 │       ├── api/client.ts
 │       └── components/
-│           ├── TrackMap.tsx       OCP path overlay
+│           ├── TrackMap.tsx       OCP path overlay + sweep Δv mode
 │           ├── VelocityProfile.tsx
 │           ├── GGDiagram.tsx
-│           └── VehicleForm.tsx
+│           ├── VehicleForm.tsx
+│           ├── SweepConfigModal.tsx
+│           ├── SavedSweepsModal.tsx
+│           └── LapTimeChart.tsx   Sweep line / heatmap / tornado
 ├── scripts/                   analysis_demo.py — comparison & trace figures
 ├── tests/                     45 pytest cases
 ├── data/                      Example tracks + vehicle configs
@@ -454,7 +489,7 @@ mypy laptime/
 | 4 — Full OCP | ✅ Done | CasADi + IPOPT direct multiple shooting |
 | 5 — Transient 7DOF + Pacejka | ✅ Done | Time-domain simulation with Magic Formula tyres and a path-following driver |
 | 6 — Validation & analysis | ✅ Done | Solver comparison, GGV envelope, load-transfer/yaw/roll traces |
-| 7 — Parameter sweep | Planned | Vectorised setup sensitivity / tornado plots |
+| 7 — Parameter sweep | ✅ Done | Parallel grid / one-at-a-time sweeps, live progress, saved results, envelope + tornado/heatmap plots |
 
 ---
 
