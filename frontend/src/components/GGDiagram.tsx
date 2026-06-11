@@ -8,16 +8,24 @@ interface Series {
   color: string;
 }
 
+export interface GGEnvelope {
+  ayG: number[];
+  axG: number[];
+  label: string;
+}
+
 interface Props {
   series: Series[];
+  envelope?: GGEnvelope;
+  extraPoints?: { ayG: number[]; axG: number[]; label: string };
 }
 
 const G = 9.81;
 
-export default function GGDiagram({ series }: Props) {
+export default function GGDiagram({ series, envelope, extraPoints }: Props) {
   const traces: Plotly.Data[] = series.map(({ result, label }) => ({
     type: "scatter" as const,
-    mode: "markers",
+    mode: "markers" as const,
     x: result.ay_ms2.map((a) => a / G),
     y: result.ax_ms2.map((a) => a / G),
     marker: {
@@ -30,6 +38,30 @@ export default function GGDiagram({ series }: Props) {
     name: label,
     hovertemplate: "ay: %{x:.2f}g  ax: %{y:.2f}g<extra></extra>",
   }));
+
+  if (extraPoints && extraPoints.ayG.length > 0) {
+    traces.push({
+      type: "scatter" as const,
+      mode: "markers",
+      x: extraPoints.ayG,
+      y: extraPoints.axG,
+      marker: { color: "#9ca3af", size: 3, opacity: 0.55 },
+      name: extraPoints.label,
+      hovertemplate: "ay: %{x:.2f}g  ax: %{y:.2f}g<extra></extra>",
+    });
+  }
+
+  if (envelope && envelope.ayG.length > 2) {
+    traces.push({
+      type: "scatter" as const,
+      mode: "lines",
+      x: envelope.ayG,
+      y: envelope.axG,
+      line: { color: "#f59e0b", width: 1.5, dash: "dot" },
+      name: envelope.label,
+      hoverinfo: "skip" as const,
+    });
+  }
 
   return (
     <Plot

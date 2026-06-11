@@ -17,6 +17,7 @@ export default defineConfig({
       "/optimize": target,
       "/ocp": target,
       "/transient": target,
+      "/sweep": target,
       "/health": target,
     },
   },

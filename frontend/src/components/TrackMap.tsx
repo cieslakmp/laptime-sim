@@ -2,16 +2,41 @@ import React from "react";
 import Plot from "react-plotly.js";
 import type { TrackDetail, SimResult, OCPSimResult } from "../api/client";
 
+export interface SweepSpread {
+  x: number[];
+  y: number[];
+  spread: number[]; // v_max - v_min [m/s] per station
+}
+
 interface Props {
   track: TrackDetail;
   results?: { label: string; result: SimResult; color: string }[];
   ocpResult?: OCPSimResult;
+  sweepSpread?: SweepSpread;
 }
 
-export default function TrackMap({ track, results, ocpResult }: Props) {
+export default function TrackMap({ track, results, ocpResult, sweepSpread }: Props) {
   const traces: Plotly.Data[] = [];
 
-  if (results && results.length > 0) {
+  if (sweepSpread) {
+    // Sweep mode: colour the line by velocity spread — where the swept
+    // parameters matter most. Uses the sweep's own x/y so saved racing-line
+    // sweeps render correctly without the original track geometry.
+    traces.push({
+      type: "scatter" as const,
+      mode: "markers",
+      x: sweepSpread.x,
+      y: sweepSpread.y,
+      marker: {
+        color: sweepSpread.spread.map((v) => v * 3.6),
+        colorscale: "Turbo",
+        size: 4,
+        colorbar: { title: { text: "Δv km/h" }, thickness: 12 },
+      },
+      name: "Sweep Δv",
+      hovertemplate: "Δv: %{marker.color:.0f} km/h<extra></extra>",
+    });
+  } else if (results && results.length > 0) {
     // Colour centreline by primary result velocity
     const primary = results[0].result;
     const vInterp = track.s.map((s) => {

@@ -8,19 +8,56 @@ interface Series {
   color: string;
 }
 
-interface Props {
-  series: Series[];
+export interface VelocityBand {
+  s: number[];
+  vMin: number[];
+  vMax: number[];
+  color: string;
+  label: string;
 }
 
-export default function VelocityProfile({ series }: Props) {
-  const traces: Plotly.Data[] = series.map(({ result, label, color }) => ({
-    type: "scatter" as const,
-    mode: "lines",
-    x: result.s,
-    y: result.v_ms.map((v) => v * 3.6),
-    name: `${label} — ${result.lap_time_s.toFixed(3)}s`,
-    line: { color, width: 2 },
-  }));
+interface Props {
+  series: Series[];
+  band?: VelocityBand;
+}
+
+export default function VelocityProfile({ series, band }: Props) {
+  const traces: Plotly.Data[] = [];
+
+  if (band) {
+    // Lower edge first, then the upper edge filled down to it (tonexty).
+    traces.push({
+      type: "scatter" as const,
+      mode: "lines",
+      x: band.s,
+      y: band.vMin.map((v) => v * 3.6),
+      line: { width: 0 },
+      hoverinfo: "skip" as const,
+      showlegend: false,
+    });
+    traces.push({
+      type: "scatter" as const,
+      mode: "lines",
+      x: band.s,
+      y: band.vMax.map((v) => v * 3.6),
+      fill: "tonexty" as const,
+      fillcolor: "rgba(99, 102, 241, 0.18)",
+      line: { width: 0 },
+      name: band.label,
+      hovertemplate: "max: %{y:.0f} km/h<extra></extra>",
+    });
+  }
+
+  series.forEach(({ result, label, color }) => {
+    traces.push({
+      type: "scatter" as const,
+      mode: "lines",
+      x: result.s,
+      y: result.v_ms.map((v) => v * 3.6),
+      name: `${label} — ${result.lap_time_s.toFixed(3)}s`,
+      line: { color, width: 2 },
+    });
+  });
 
   return (
     <Plot
