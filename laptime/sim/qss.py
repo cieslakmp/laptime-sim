@@ -106,7 +106,8 @@ class QSSSolver:
 
         # --- Accelerations ---
         ay = v**2 * kappa
-        ax = np.gradient(v, s)
+        # Chain rule: ax = dv/dt = v * dv/ds  (np.gradient alone gives dv/ds [1/s])
+        ax = v * np.gradient(v, s)
 
         return LapResult(
             lap_time_s=lap_time,
